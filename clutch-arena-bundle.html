@@ -293,6 +293,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
       </div>
       <div class="display-tip" id="display-tip"></div>
       <div class="display-footer">
+        <button id="btn-display-home" class="btn btn-secondary">⌂ HOME</button>
         <button id="btn-display-play" class="btn btn-primary">▶ PLAY NOW</button>
         <button id="btn-display-reset" class="btn btn-ghost btn-small">RESET BOARDS (hold 2s)</button>
       </div>
@@ -551,7 +552,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     function nextPosition() {
       var p = null;
       for (var attempt = 0; attempt < 12; attempt++) {
-        var cand = { x: rng.range(0.08, 0.92), y: rng.range(0.10, 0.90) };
+        var cand = { x: rng.range(0.10, 0.90), y: rng.range(0.12, 0.88) };
         var ok = lastPositions.every(function (q) {
           var dx = cand.x - q.x, dy = (cand.y - q.y) * 1.4;
           return Math.sqrt(dx * dx + dy * dy) > 0.35;
@@ -617,6 +618,13 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    // keep live targets in place if the arena size changed mid-run
+    if (this.active) {
+      this.active.forEach(function (t) {
+        t.px = t.fx * this.w;
+        t.py = t.fy * this.h;
+      }, this);
+    }
   };
 
   ClutchGame.prototype._resetRun = function () {
@@ -631,6 +639,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     this.hp = MAX_HP;
     this.round = 0;
     this.roundsWon = 0;
+    this.roundClean = true; // false once the player is shot during this round
     this.shots = 0;
     this.hits = 0;
     this.reactions = [];
@@ -646,6 +655,9 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   ClutchGame.prototype.startRun = function (opts) {
     opts = opts || {};
     this._resetRun();
+    // the canvas is hidden until the game screen shows; measure it now that
+    // it is visible, otherwise clicks and targets use different coordinates
+    this._resize();
     this.seed = opts.seed || ClutchRng.randomSeed();
     this.plan = buildPlan(this.seed);
     this.state = 'banner';
@@ -669,18 +681,22 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   ClutchGame.prototype._startRound = function () {
     this.state = 'playing';
     this.roundStartAt = performance.now();
+    this.roundClean = true;
     this.planIdx = this.plan.findIndex(function (ev) { return ev.round === this.round; }, this);
     if (this.planIdx < 0) this.planIdx = 0;
     if (this.hooks.onBanner) this.hooks.onBanner(null);
   };
 
   ClutchGame.prototype._endRound = function (cleared) {
-    if (cleared) {
+    if (cleared && this.roundClean) {
       this.roundsWon++;
       var bonus = 250 * (this.round + 1);
       this.score += bonus;
       ClutchSfx.roundClear();
       this._popup(this.w / 2, this.h * 0.4, 'ROUND CLEAR  +' + bonus, '#34d399', 26);
+    } else if (cleared) {
+      // survived the round but took a hit: no bonus, round not counted as won
+      this._popup(this.w / 2, this.h * 0.4, 'ROUND SURVIVED', '#fbbf24', 22);
     }
     if (this.round >= ROUNDS.length - 1) {
       this.victory = cleared && this.hp > 0;
@@ -813,6 +829,9 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
 
   ClutchGame.prototype._loop = function (now) {
     this.raf = requestAnimationFrame(this._loop);
+    // re-measure if the displayed size changed (window resize, screen shown)
+    var cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
+    if (cw > 0 && (cw !== this.w || ch !== this.h)) this._resize();
     if (this.state === 'banner' && now >= this.bannerUntil) this._startRound();
     if (this.state === 'clearing' && now >= this.clearUntil) {
       this.state = 'banner';
@@ -826,6 +845,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
         if (now - this.roundStartAt < ev.at) break;
         ev.targets.forEach(function (spec) {
           this.active.push({
+            fx: spec.x, fy: spec.y,
             px: spec.x * this.w, py: spec.y * this.h,
             radius: spec.radius, peek: spec.peek,
             spawnAt: now, currentRadius: spec.radius * 0.3,
@@ -843,6 +863,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
           this.active.splice(i, 1);
           this.hp--;
           this.combo = 0;
+          this.roundClean = false;
           this.shakeUntil = now + 220;
           if (this.hooks.onPlayerShot) this.hooks.onPlayerShot();
           ClutchSfx.shot();
@@ -1188,12 +1209,15 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
 
   function showDuelResult() {
     var a = duel.results[0], b = duel.results[1];
-    var winner = a.score >= b.score ? 0 : 1;
-    $('duel-winner').textContent = '🏆 ' + (winner === 0 ? duel.p1 : duel.p2) + ' WINS!';
+    var tie = a.score === b.score;
+    var winner = tie ? -1 : (a.score > b.score ? 0 : 1);
+    $('duel-winner').textContent = tie
+      ? '🤝 IT\'S A TIE — ' + a.score.toLocaleString() + ' PTS EACH!'
+      : '🏆 ' + (winner === 0 ? duel.p1 : duel.p2) + ' WINS!';
     $('duel-compare').innerHTML = [0, 1].map(function (i) {
       var r = duel.results[i];
       var name = i === 0 ? duel.p1 : duel.p2;
-      return '<div class="duel-card' + (i === winner ? ' won' : '') + '">' +
+      return '<div class="duel-card' + (tie || i === winner ? ' won' : '') + '">' +
         '<div class="n">' + name + '</div>' +
         '<div class="s">' + r.score.toLocaleString() + '</div>' +
         '<div class="d">Rounds: ' + r.roundsWon + '/5<br>Accuracy: ' + Math.round(r.accuracy) + '%<br>' +
@@ -1334,6 +1358,9 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     });
 
     // display
+    $('btn-display-home').addEventListener('click', function () {
+      mode = 'solo'; show('screen-home'); renderHomeTop5(); armAttract();
+    });
     $('btn-display-play').addEventListener('click', function () {
       mode = 'solo'; disarmAttract(); startRun();
     });
