@@ -506,11 +506,11 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   'use strict';
 
   var ROUNDS = [
-    { label: '1v1', count: 1, peek: 1000, radius: 46, gap: 800, pairs: 0 },
-    { label: '1v2', count: 2, peek: 850, radius: 42, gap: 750, pairs: 0 },
-    { label: '1v3', count: 3, peek: 700, radius: 38, gap: 700, pairs: 1 },
-    { label: '1v4', count: 4, peek: 580, radius: 34, gap: 650, pairs: 2 },
-    { label: '1v5', count: 5, peek: 480, radius: 30, gap: 600, pairs: 2 }
+    { label: '1v1', count: 1, peek: 1400, radius: 52, gap: 900, pairs: 0 },
+    { label: '1v2', count: 2, peek: 1200, radius: 48, gap: 850, pairs: 0 },
+    { label: '1v3', count: 3, peek: 1000, radius: 44, gap: 800, pairs: 1 },
+    { label: '1v4', count: 4, peek: 850, radius: 42, gap: 750, pairs: 2 },
+    { label: '1v5', count: 5, peek: 700, radius: 40, gap: 700, pairs: 2 }
   ];
   var MAX_HP = 3;
   var BASE_POINTS = 100;
@@ -530,8 +530,8 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   }
 
   function speedBonus(reactionMs) {
-    if (reactionMs < 200) return 100;
-    if (reactionMs < 400) return 50;
+    if (reactionMs < 300) return 100;
+    if (reactionMs < 500) return 50;
     return 0;
   }
 
@@ -765,7 +765,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     for (var i = this.active.length - 1; i >= 0; i--) {
       var t = this.active[i];
       var dx = x - t.px, dy = y - t.py;
-      var r = t.currentRadius * 1.05; // slightly forgiving
+      var r = t.currentRadius * 1.2; // forgiving hitbox, especially on touch
       if (dx * dx + dy * dy <= r * r) {
         var reaction = Math.round(now - t.spawnAt);
         this.reactions.push(reaction);
@@ -1228,9 +1228,19 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   }
 
   /* ---------- attract mode ---------- */
+  var ATTRACT_DELAY = 30000; // ms of idle time before the demo loop starts
+  (function () {
+    var param = new URLSearchParams(window.location.search).get('attract');
+    if (param !== null) {
+      var secs = parseInt(param, 10);
+      ATTRACT_DELAY = isNaN(secs) ? 30000 : Math.max(0, secs) * 1000;
+    }
+  })();
+
   function armAttract() {
     disarmAttract();
-    attractTimer = setTimeout(startAttract, 30000);
+    if (ATTRACT_DELAY <= 0) return; // attract=0 disables the demo loop
+    attractTimer = setTimeout(startAttract, ATTRACT_DELAY);
   }
 
   function disarmAttract() {
