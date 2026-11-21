@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clutch Arena — Booth Mini Game | Cloud9 x JetBrains Hackathon 2026</title>
+<meta name="description" content="You're the last player standing. Win clutch rounds 1v1 to 1v5. A fast, booth-ready aim and reaction game.">
+<style>
+/* Clutch Arena — dark neon arena theme. All original. */
+:root {
+  --bg: #070b16;
+  --bg2: #0d1526;
+  --panel: #111c33;
+  --cyan: #22d3ee;
+  --magenta: #f472b6;
+  --gold: #fbbf24;
+  --green: #34d399;
+  --red: #f87171;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --line: #1e293b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#app { height: 100%; }
+.screen { display: none; height: 100%; }
+.screen.active { display: flex; flex-direction: column; }
+
+/* ---------- buttons ---------- */
+.btn {
+  font-family: inherit; font-weight: 800; letter-spacing: .06em;
+  border: none; border-radius: 10px; cursor: pointer;
+  padding: 14px 28px; font-size: 16px; transition: transform .08s, box-shadow .15s;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary { background: linear-gradient(135deg, var(--cyan), #0ea5e9); color: #04121f; box-shadow: 0 0 24px rgba(34,211,238,.35); }
+.btn-primary:hover { box-shadow: 0 0 34px rgba(34,211,238,.55); }
+.btn-secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.btn-secondary:hover { border-color: var(--cyan); }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn-ghost:hover { color: var(--text); }
+.btn-small { padding: 9px 16px; font-size: 13px; }
+.link-btn { background: none; border: none; color: var(--cyan); font: inherit; cursor: pointer; font-weight: 700; }
+
+/* ---------- home ---------- */
+#screen-home { align-items: center; justify-content: center; text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, #12233f 0%, var(--bg) 65%); }
+.home-inner { max-width: 640px; padding: 20px; width: 100%; }
+.logo-badge { font-size: 11px; letter-spacing: .28em; color: var(--muted); margin-bottom: 10px; }
+.game-title { font-size: clamp(52px, 10vw, 96px); font-weight: 900; letter-spacing: -.02em; line-height: .95;
+  background: linear-gradient(120deg, var(--cyan), #818cf8 55%, var(--magenta));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.game-title span { display: block; font-size: .52em; letter-spacing: .42em; margin-left: .42em; }
+.tagline { color: var(--muted); font-size: 17px; margin: 14px 0 26px; }
+.mode-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.mode-buttons .btn { width: min(360px, 90%); }
+.howto { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin: 26px 0 18px; color: var(--muted); font-size: 14px; }
+.howto-key { display: inline-block; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px 8px; color: var(--cyan); font-weight: 800; font-size: 12px; margin-right: 6px; }
+.home-board { background: rgba(17,28,51,.7); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; text-align: left; }
+.home-board h3 { font-size: 13px; letter-spacing: .12em; color: var(--gold); margin-bottom: 8px; }
+.mini-board { list-style: none; font-size: 14px; }
+.mini-board li { display: flex; justify-content: space-between; padding: 3px 0; color: var(--muted); }
+.mini-board li b { color: var(--text); }
+.mini-board .empty { color: var(--muted); font-style: italic; }
+.attract-hint { display: none; position: fixed; bottom: 26px; left: 0; right: 0; text-align: center;
+  color: var(--cyan); font-weight: 800; letter-spacing: .2em; font-size: 15px; animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+body.attract .attract-hint { display: block; }
+body.attract .home-inner { opacity: .25; pointer-events: none; }
+
+/* ---------- game ---------- */
+.hud { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 18px; background: var(--bg2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.hud-round { font-weight: 900; font-size: 18px; letter-spacing: .08em; }
+.hud-round span { color: var(--cyan); }
+.hud-hp { display: flex; gap: 6px; margin-top: 4px; }
+.hp-plate { width: 34px; height: 10px; border-radius: 3px; background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,.6); }
+.hp-plate.lost { background: #334155; box-shadow: none; }
+.hud-score { font-size: 34px; font-weight: 900; line-height: 1; color: #fff; }
+.hud-combo { min-height: 20px; font-size: 14px; font-weight: 800; color: var(--gold); text-align: center; }
+.hud-right { text-align: right; }
+.hud-stat { font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.hud-stat span { color: var(--text); font-weight: 800; font-size: 14px; }
+.arena-wrap { position: relative; flex: 1; min-height: 0; background:
+  radial-gradient(ellipse at 50% 120%, #16263f 0%, var(--bg) 70%); overflow: hidden; }
+#arena { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.round-banner { position: absolute; top: 34%; left: 0; right: 0; text-align: center;
+  font-size: clamp(34px, 7vw, 64px); font-weight: 900; letter-spacing: .1em; color: #fff;
+  text-shadow: 0 0 30px rgba(34,211,238,.8); pointer-events: none; }
+.round-banner.sub { font-size: clamp(16px, 3vw, 24px); top: calc(34% + 74px); color: var(--cyan); text-shadow: none; }
+.hidden { display: none !important; }
+.flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(248,113,113,.55) 100%); }
+.flash.on { opacity: 1; transition: opacity .45s; }
+.game-footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 18px;
+  background: var(--bg2); border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.duel-indicator { color: var(--magenta); font-weight: 800; }
+
+/* ---------- score ---------- */
+#screen-score { align-items: center; justify-content: center; text-align: center; }
+.score-inner { max-width: 560px; width: 100%; padding: 20px; }
+.score-outcome { font-size: 15px; letter-spacing: .3em; color: var(--muted); }
+.score-rank { font-size: clamp(40px, 8vw, 64px); font-weight: 900; margin: 6px 0 2px;
+  background: linear-gradient(120deg, var(--gold), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.score-final { font-size: 52px; font-weight: 900; margin-bottom: 18px; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 6px; }
+.stat-cell .v { font-size: 22px; font-weight: 900; }
+.stat-cell .k { font-size: 11px; color: var(--muted); letter-spacing: .08em; margin-top: 2px; }
+.initials-box { background: var(--panel); border: 1px solid var(--gold); border-radius: 12px; padding: 14px; margin-bottom: 18px; }
+.initials-label { font-size: 13px; color: var(--gold); font-weight: 800; letter-spacing: .08em; margin-bottom: 10px; }
+.initials-row { display: flex; gap: 10px; justify-content: center; }
+.initials-row input { width: 110px; text-align: center; font-size: 26px; font-weight: 900; letter-spacing: .3em;
+  text-transform: uppercase; background: var(--bg); color: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px; outline: none; }
+.score-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- duel ---------- */
+#screen-duel-setup, #screen-duel-result { align-items: center; justify-content: center; text-align: center; }
+.duel-inner { max-width: 620px; width: 100%; padding: 20px; }
+.duel-inner h2 { font-size: 40px; font-weight: 900; margin-bottom: 12px; }
+.duel-desc { color: var(--muted); line-height: 1.7; margin-bottom: 22px; }
+.duel-desc b { color: var(--text); }
+.duel-names { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+.duel-names label { font-size: 12px; color: var(--muted); letter-spacing: .1em; font-weight: 800; }
+.duel-names input { display: block; margin-top: 6px; width: 200px; text-align: center; font-size: 18px; font-weight: 800;
+  background: var(--panel); color: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px; outline: none; }
+.duel-winner { font-size: clamp(32px, 6vw, 52px); font-weight: 900; margin-bottom: 20px; color: var(--gold); }
+.duel-compare { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+.duel-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 26px; min-width: 200px; }
+.duel-card.won { border-color: var(--gold); box-shadow: 0 0 24px rgba(251,191,36,.25); }
+.duel-card .n { font-size: 13px; color: var(--muted); letter-spacing: .1em; font-weight: 800; }
+.duel-card .s { font-size: 40px; font-weight: 900; margin: 6px 0; }
+.duel-card .d { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+/* ---------- booth display ---------- */
+#screen-display { background: radial-gradient(ellipse at 50% 0%, #12233f 0%, var(--bg) 60%); }
+.display-inner { flex: 1; display: flex; flex-direction: column; padding: 22px 30px; gap: 16px; min-height: 0; }
+.display-header { display: flex; justify-content: space-between; align-items: baseline; }
+.display-title { font-size: clamp(26px, 4vw, 40px); font-weight: 900; }
+.display-title span { color: var(--cyan); }
+.display-clock { font-size: 20px; color: var(--muted); font-weight: 700; }
+.display-champ { text-align: center; font-size: clamp(18px, 3vw, 26px); font-weight: 800; color: var(--gold); min-height: 34px; }
+.display-boards { display: flex; gap: 20px; flex: 1; min-height: 0; }
+.display-board { flex: 1; background: rgba(17,28,51,.75); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; }
+.display-board h3 { font-size: 16px; letter-spacing: .14em; color: var(--cyan); margin-bottom: 12px; }
+.big-board { list-style: none; font-size: clamp(16px, 2.2vw, 22px); }
+.big-board li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(30,41,59,.6); }
+.big-board li b { color: #fff; }
+.big-board li .r { color: var(--gold); font-weight: 800; margin-right: 10px; }
+.big-board .empty { color: var(--muted); font-style: italic; font-size: 16px; }
+.display-tip { text-align: center; color: var(--muted); font-size: 15px; min-height: 22px; }
+.display-footer { display: flex; gap: 12px; justify-content: center; align-items: center; }
+
+@media (max-width: 640px) {
+  .display-boards { flex-direction: column; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .hud-score { font-size: 26px; }
+  .howto { flex-direction: column; gap: 6px; }
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen active">
+    <div class="home-inner">
+      <div class="logo-badge">CLOUD9 × JETBRAINS · SKY'S THE LIMIT 2026</div>
+      <h1 class="game-title">CLUTCH<span>ARENA</span></h1>
+      <p class="tagline">Last one standing. Win the clutch, round by round.</p>
+
+      <div class="mode-buttons">
+        <button id="btn-solo" class="btn btn-primary">▶ SOLO RUN</button>
+        <button id="btn-duel" class="btn btn-secondary">⚔ DUEL MODE · 2 PLAYERS</button>
+        <button id="btn-display" class="btn btn-ghost">▣ BOOTH DISPLAY</button>
+      </div>
+
+      <div class="howto">
+        <div class="howto-item"><span class="howto-key">CLICK</span> targets before they shoot you</div>
+        <div class="howto-item"><span class="howto-key">3 HP</span> — get shot 3 times and the run ends</div>
+        <div class="howto-item"><span class="howto-key">FAST</span> flicks score more · streaks build your multiplier</div>
+      </div>
+
+      <div class="home-board">
+        <h3>🏆 TODAY'S TOP 5</h3>
+        <ol id="home-top5" class="mini-board"></ol>
+      </div>
+    </div>
+    <div class="attract-hint" id="attract-hint">DEMO PLAYING — TAP ANYWHERE TO PLAY</div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen">
+    <div class="hud">
+      <div class="hud-left">
+        <div class="hud-round">ROUND <span id="hud-round">1</span>/5 <span id="hud-round-label">1v1</span></div>
+        <div class="hud-hp" id="hud-hp"></div>
+      </div>
+      <div class="hud-center">
+        <div class="hud-score" id="hud-score">0</div>
+        <div class="hud-combo" id="hud-combo"></div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-stat">AVG FLICK <span id="hud-avg">—</span></div>
+        <div class="hud-stat">ACCURACY <span id="hud-acc">—</span></div>
+        <button id="btn-quit" class="btn btn-small">✕ QUIT</button>
+      </div>
+    </div>
+    <div class="arena-wrap">
+      <canvas id="arena"></canvas>
+      <div id="round-banner" class="round-banner hidden"></div>
+      <div id="flash" class="flash"></div>
+    </div>
+    <div class="game-footer">
+      <span id="duel-indicator" class="duel-indicator hidden"></span>
+      <span class="footer-hint">Click the targets · <button id="btn-sound" class="link-btn">🔊 SOUND ON</button></span>
+    </div>
+  </section>
+
+  <!-- ============ SCORE ============ -->
+  <section id="screen-score" class="screen">
+    <div class="score-inner">
+      <div id="score-outcome" class="score-outcome">CLUTCH CLEARED</div>
+      <div id="score-rank" class="score-rank">CHAMPION</div>
+      <div id="score-final" class="score-final">0</div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div id="initials-box" class="initials-box hidden">
+        <div class="initials-label">NEW HIGH SCORE — ENTER YOUR INITIALS</div>
+        <div class="initials-row">
+          <input id="initials-input" maxlength="3" placeholder="AAA" autocomplete="off">
+          <button id="btn-save-score" class="btn btn-primary btn-small">SAVE</button>
+        </div>
+      </div>
+      <div class="score-buttons">
+        <button id="btn-again" class="btn btn-primary">↻ PLAY AGAIN</button>
+        <button id="btn-home" class="btn btn-secondary">⌂ HOME</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DUEL SETUP ============ -->
+  <section id="screen-duel-setup" class="screen">
+    <div class="duel-inner">
+      <h2>⚔ DUEL MODE</h2>
+      <p class="duel-desc">Two players. One identical clutch.<br>Player 1 plays first — then Player 2 faces the <b>exact same</b> targets.<br>Higher score wins.</p>
+      <div class="duel-names">
+        <label>PLAYER 1 <input id="duel-p1" maxlength="10" value="PLAYER 1" autocomplete="off"></label>
+        <label>PLAYER 2 <input id="duel-p2" maxlength="10" value="PLAYER 2" autocomplete="off"></label>
+      </div>
+      <button id="btn-duel-start" class="btn btn-primary">▶ PLAYER 1 — GO</button>
+      <button id="btn-duel-back" class="btn btn-ghost">← BACK</button>
+    </div>
+  </section>
+
+  <!-- ============ DUEL RESULT ============ -->
+  <section id="screen-duel-result" class="screen">
+    <div class="duel-inner">
+      <div id="duel-winner" class="duel-winner"></div>
+      <div class="duel-compare" id="duel-compare"></div>
+      <div class="score-buttons">
+        <button id="btn-duel-rematch" class="btn btn-primary">↻ REMATCH</button>
+        <button id="btn-duel-home" class="btn btn-secondary">⌂ HOME</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BOOTH DISPLAY ============ -->
+  <section id="screen-display" class="screen">
+    <div class="display-inner">
+      <div class="display-header">
+        <div class="display-title">CLUTCH<span>ARENA</span> · LIVE LEADERBOARD</div>
+        <div class="display-clock" id="display-clock"></div>
+      </div>
+      <div class="display-champ" id="display-champ"></div>
+      <div class="display-boards">
+        <div class="display-board">
+          <h3>🏆 TODAY</h3>
+          <ol id="display-today" class="big-board"></ol>
+        </div>
+        <div class="display-board">
+          <h3>👑 ALL TIME</h3>
+          <ol id="display-alltime" class="big-board"></ol>
+        </div>
+      </div>
+      <div class="display-tip" id="display-tip"></div>
+      <div class="display-footer">
+        <button id="btn-display-play" class="btn btn-primary">▶ PLAY NOW</button>
+        <button id="btn-display-reset" class="btn btn-ghost btn-small">RESET BOARDS (hold 2s)</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* Seeded RNG (mulberry32) — deterministic target sequences so Duel Mode
+   can give both players the exact same clutch. */
+(function (global) {
+  'use strict';
+
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeRng(seed) {
+    var next = mulberry32(seed);
+    return {
+      next: next,
+      // float in [min, max)
+      range: function (min, max) { return min + next() * (max - min); },
+      // int in [min, max]
+      int: function (min, max) { return Math.floor(min + next() * (max - min + 1)); },
+      pick: function (arr) { return arr[Math.floor(next() * arr.length)]; }
+    };
+  }
+
+  function randomSeed() {
+    return Math.floor(Math.random() * 0xFFFFFFFF) >>> 0;
+  }
+
+  global.ClutchRng = { makeRng: makeRng, randomSeed: randomSeed };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* Tiny WebAudio synth SFX — no audio files, no copyrighted material. */
+(function (global) {
+  'use strict';
+
+  var ctx = null;
+  var enabled = true;
+
+  function ensureCtx() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function tone(freq, dur, type, vol, slideTo) {
+    if (!enabled) return;
+    var c = ensureCtx();
+    if (!c) return;
+    var t0 = c.currentTime;
+    var osc = c.createOscillator();
+    var gain = c.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    gain.gain.setValueAtTime(vol || 0.15, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(gain).connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  var Sfx = {
+    setEnabled: function (v) { enabled = !!v; },
+    isEnabled: function () { return enabled; },
+    unlock: function () { ensureCtx(); },
+    hit: function (combo) {
+      // pitch rises with combo — satisfying streak feedback
+      var base = 520 + Math.min(combo, 12) * 28;
+      tone(base, 0.09, 'triangle', 0.18, base * 1.5);
+    },
+    miss: function () { tone(160, 0.12, 'sawtooth', 0.06, 110); },
+    shot: function () { tone(220, 0.25, 'sawtooth', 0.14, 55); },
+    spawn: function () { tone(880, 0.05, 'sine', 0.05, 1200); },
+    roundClear: function () {
+      tone(523, 0.12, 'triangle', 0.15);
+      setTimeout(function () { tone(659, 0.12, 'triangle', 0.15); }, 90);
+      setTimeout(function () { tone(784, 0.2, 'triangle', 0.16); }, 180);
+    },
+    gameOver: function () {
+      tone(392, 0.18, 'triangle', 0.14, 330);
+      setTimeout(function () { tone(311, 0.3, 'triangle', 0.14, 262); }, 160);
+    },
+    victory: function () {
+      [523, 659, 784, 1047].forEach(function (f, i) {
+        setTimeout(function () { tone(f, 0.22, 'triangle', 0.16); }, i * 110);
+      });
+    },
+    click: function () { tone(700, 0.05, 'sine', 0.08); }
+  };
+
+  global.ClutchSfx = Sfx;
+})(window);
+
+</script>
+<script>
+/* Local leaderboard — localStorage only, works fully offline.
+   Broadcasts updates to the Booth Display view on the same machine via
+   BroadcastChannel (with a storage-event fallback). */
+(function (global) {
+  'use strict';
+
+  var KEY_ALL = 'clutch-arena:board:alltime';
+  var KEY_DAY_PREFIX = 'clutch-arena:board:day:';
+  var CHANNEL = 'clutch-arena-board';
+  var MAX_ENTRIES = 10;
+
+  var bc = null;
+  try { bc = new BroadcastChannel(CHANNEL); } catch (e) { bc = null; }
+
+  function todayKey() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return KEY_DAY_PREFIX + d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  function load(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+
+  function save(key, arr) {
+    try { localStorage.setItem(key, JSON.stringify(arr.slice(0, MAX_ENTRIES))); } catch (e) {}
+  }
+
+  function sortDesc(arr) {
+    return arr.slice().sort(function (a, b) { return b.score - a.score; });
+  }
+
+  function qualifies(score, list) {
+    if (score <= 0) return false;
+    if (list.length < MAX_ENTRIES) return true;
+    return score > list[list.length - 1].score;
+  }
+
+  var Board = {
+    today: function () { return sortDesc(load(todayKey())); },
+    allTime: function () { return sortDesc(load(KEY_ALL)); },
+
+    qualifiesToday: function (score) { return qualifies(score, this.today()); },
+    qualifiesAllTime: function (score) { return qualifies(score, this.allTime()); },
+
+    add: function (entry) {
+      var e = {
+        name: (entry.name || 'ACE').toUpperCase().slice(0, 3),
+        score: entry.score | 0,
+        rounds: entry.rounds | 0,
+        acc: Math.round(entry.acc || 0),
+        at: Date.now()
+      };
+      save(todayKey(), sortDesc(load(todayKey()).concat([e])));
+      save(KEY_ALL, sortDesc(load(KEY_ALL).concat([e])));
+      this.broadcast();
+      return e;
+    },
+
+    clearAll: function () {
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k === KEY_ALL || k.indexOf(KEY_DAY_PREFIX) === 0) localStorage.removeItem(k);
+        });
+      } catch (e) {}
+      this.broadcast();
+    },
+
+    broadcast: function () {
+      if (bc) { try { bc.postMessage({ type: 'board-updated', at: Date.now() }); } catch (e) {} }
+    },
+
+    onUpdate: function (fn) {
+      if (bc) bc.onmessage = function (ev) { if (ev.data && ev.data.type === 'board-updated') fn(); };
+      window.addEventListener('storage', function (ev) {
+        if (ev.key === KEY_ALL || (ev.key && ev.key.indexOf(KEY_DAY_PREFIX) === 0)) fn();
+      });
+    }
+  };
+
+  global.ClutchBoard = Board;
+})(window);
+
+</script>
+<script>
+/* Clutch Arena — game engine.
+   Solo clutch run: 5 rounds (1v1 → 1v5). Targets peek from cover; click them
+   before their peek window expires or they shoot you. Seeded spawn plans make
+   Duel Mode fair: both players face the exact same sequence. */
+(function (global) {
+  'use strict';
+
+  var ROUNDS = [
+    { label: '1v1', count: 1, peek: 1000, radius: 46, gap: 800, pairs: 0 },
+    { label: '1v2', count: 2, peek: 850, radius: 42, gap: 750, pairs: 0 },
+    { label: '1v3', count: 3, peek: 700, radius: 38, gap: 700, pairs: 1 },
+    { label: '1v4', count: 4, peek: 580, radius: 34, gap: 650, pairs: 2 },
+    { label: '1v5', count: 5, peek: 480, radius: 30, gap: 600, pairs: 2 }
+  ];
+  var MAX_HP = 3;
+  var BASE_POINTS = 100;
+  var RANKS = [
+    { min: 7500, name: 'CHAMPION' },
+    { min: 5000, name: 'ELITE' },
+    { min: 3000, name: 'PRO' },
+    { min: 1500, name: 'RISING' },
+    { min: 0, name: 'ROOKIE' }
+  ];
+
+  function rankFor(score) {
+    for (var i = 0; i < RANKS.length; i++) {
+      if (score >= RANKS[i].min) return RANKS[i].name;
+    }
+    return 'ROOKIE';
+  }
+
+  function speedBonus(reactionMs) {
+    if (reactionMs < 200) return 100;
+    if (reactionMs < 400) return 50;
+    return 0;
+  }
+
+  function comboMultiplier(combo) {
+    return Math.min(1 + 0.1 * Math.max(combo - 1, 0), 2.0);
+  }
+
+  function scoreForHit(reactionMs, combo) {
+    return Math.round((BASE_POINTS + speedBonus(reactionMs)) * comboMultiplier(combo));
+  }
+
+  /* Build the full spawn plan for a run from a seed. Positions are fractions
+     of the arena so the same plan works on any screen size. */
+  function buildPlan(seed) {
+    var rng = ClutchRng.makeRng(seed);
+    var plan = [];
+    var lastPositions = [];
+    function nextPosition() {
+      var p = null;
+      for (var attempt = 0; attempt < 12; attempt++) {
+        var cand = { x: rng.range(0.08, 0.92), y: rng.range(0.10, 0.90) };
+        var ok = lastPositions.every(function (q) {
+          var dx = cand.x - q.x, dy = (cand.y - q.y) * 1.4;
+          return Math.sqrt(dx * dx + dy * dy) > 0.35;
+        });
+        if (ok || attempt === 11) { p = cand; break; }
+      }
+      lastPositions.push(p);
+      if (lastPositions.length > 2) lastPositions.shift();
+      return p;
+    }
+    ROUNDS.forEach(function (round, ri) {
+      var events = [];
+      var singles = round.count - round.pairs * 2;
+      for (var i = 0; i < round.pairs; i++) events.push(2);
+      for (var j = 0; j < singles; j++) events.push(1);
+      // shuffle event sizes so pairs don't always come last
+      for (var k = events.length - 1; k > 0; k--) {
+        var m = Math.floor(rng.next() * (k + 1));
+        var tmp = events[k]; events[k] = events[m]; events[m] = tmp;
+      }
+      var t = 600; // first spawn shortly after the round banner
+      events.forEach(function (size) {
+        var ev = { at: t, targets: [] };
+        for (var s = 0; s < size; s++) {
+          var pos = nextPosition();
+          ev.targets.push({
+            x: pos.x, y: pos.y,
+            radius: round.radius, peek: round.peek
+          });
+        }
+        plan.push({ round: ri, at: t, targets: ev.targets });
+        t += round.gap + rng.int(0, 150);
+      });
+    });
+    return plan;
+  }
+
+  function ClutchGame(canvas, hooks) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.hooks = hooks || {};
+    this.state = 'idle'; // idle | banner | playing | clearing | over
+    this.raf = 0;
+    this.dpr = 1;
+    this.w = 0; this.h = 0;
+    this.mouse = { x: -100, y: -100, inside: false };
+    this._resize = this._resize.bind(this);
+    this._loop = this._loop.bind(this);
+    this._onPointerMove = this._onPointerMove.bind(this);
+    this._onPointerDown = this._onPointerDown.bind(this);
+    window.addEventListener('resize', this._resize);
+    canvas.addEventListener('pointermove', this._onPointerMove);
+    canvas.addEventListener('pointerdown', this._onPointerDown);
+    this._resize();
+    this._resetRun();
+  }
+
+  ClutchGame.prototype._resize = function () {
+    var rect = this.canvas.getBoundingClientRect();
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.w = Math.max(320, rect.width);
+    this.h = Math.max(240, rect.height);
+    this.canvas.width = Math.round(this.w * this.dpr);
+    this.canvas.height = Math.round(this.h * this.dpr);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  };
+
+  ClutchGame.prototype._resetRun = function () {
+    this.plan = [];
+    this.planIdx = 0;
+    this.active = [];      // live targets
+    this.particles = [];
+    this.popups = [];
+    this.score = 0;
+    this.combo = 0;
+    this.bestCombo = 0;
+    this.hp = MAX_HP;
+    this.round = 0;
+    this.roundsWon = 0;
+    this.shots = 0;
+    this.hits = 0;
+    this.reactions = [];
+    this.runStartAt = 0;
+    this.roundStartAt = 0;
+    this.bannerUntil = 0;
+    this.clearUntil = 0;
+    this.shakeUntil = 0;
+    this.victory = false;
+    this.seed = 0;
+  };
+
+  ClutchGame.prototype.startRun = function (opts) {
+    opts = opts || {};
+    this._resetRun();
+    this.seed = opts.seed || ClutchRng.randomSeed();
+    this.plan = buildPlan(this.seed);
+    this.state = 'banner';
+    this.runStartAt = performance.now();
+    this._showRoundBanner(0);
+    this._emitHud();
+    cancelAnimationFrame(this.raf);
+    this.raf = requestAnimationFrame(this._loop);
+  };
+
+  ClutchGame.prototype._showRoundBanner = function (roundIdx) {
+    this.round = roundIdx;
+    this.bannerUntil = performance.now() + 1100;
+    if (this.hooks.onBanner) {
+      var r = ROUNDS[roundIdx];
+      this.hooks.onBanner('ROUND ' + (roundIdx + 1) + ' — ' + r.label,
+        roundIdx === 0 ? 'Click the targets before they shoot you' : '');
+    }
+  };
+
+  ClutchGame.prototype._startRound = function () {
+    this.state = 'playing';
+    this.roundStartAt = performance.now();
+    this.planIdx = this.plan.findIndex(function (ev) { return ev.round === this.round; }, this);
+    if (this.planIdx < 0) this.planIdx = 0;
+    if (this.hooks.onBanner) this.hooks.onBanner(null);
+  };
+
+  ClutchGame.prototype._endRound = function (cleared) {
+    if (cleared) {
+      this.roundsWon++;
+      var bonus = 250 * (this.round + 1);
+      this.score += bonus;
+      ClutchSfx.roundClear();
+      this._popup(this.w / 2, this.h * 0.4, 'ROUND CLEAR  +' + bonus, '#34d399', 26);
+    }
+    if (this.round >= ROUNDS.length - 1) {
+      this.victory = cleared && this.hp > 0;
+      this._finishRun();
+      return;
+    }
+    this.state = 'clearing';
+    this.clearUntil = performance.now() + 1300;
+    this._nextRound = this.round + 1;
+    this._emitHud();
+  };
+
+  ClutchGame.prototype._finishRun = function () {
+    this.state = 'over';
+    if (this.hp > 0) this.score += this.hp * 500;
+    var acc = this.shots > 0 ? (this.hits / this.shots) * 100 : 0;
+    var avg = this.reactions.length
+      ? Math.round(this.reactions.reduce(function (a, b) { return a + b; }, 0) / this.reactions.length)
+      : 0;
+    var best = this.reactions.length ? Math.min.apply(null, this.reactions) : 0;
+    if (this.victory) ClutchSfx.victory(); else ClutchSfx.gameOver();
+    this._emitHud();
+    if (this.hooks.onGameOver) {
+      this.hooks.onGameOver({
+        score: this.score, roundsWon: this.roundsWon, victory: this.victory,
+        hits: this.hits, shots: this.shots, accuracy: acc,
+        avgReaction: avg, bestFlick: best, bestCombo: this.bestCombo,
+        rank: rankFor(this.score), seed: this.seed
+      });
+    }
+  };
+
+  ClutchGame.prototype.quit = function () {
+    cancelAnimationFrame(this.raf);
+    this.state = 'idle';
+    this._resetRun();
+    this._render(performance.now());
+  };
+
+  ClutchGame.prototype.destroy = function () {
+    cancelAnimationFrame(this.raf);
+    window.removeEventListener('resize', this._resize);
+    this.canvas.removeEventListener('pointermove', this._onPointerMove);
+    this.canvas.removeEventListener('pointerdown', this._onPointerDown);
+  };
+
+  ClutchGame.prototype._onPointerMove = function (ev) {
+    var rect = this.canvas.getBoundingClientRect();
+    this.mouse.x = ev.clientX - rect.left;
+    this.mouse.y = ev.clientY - rect.top;
+    this.mouse.inside = true;
+  };
+
+  ClutchGame.prototype._onPointerDown = function (ev) {
+    ev.preventDefault();
+    var rect = this.canvas.getBoundingClientRect();
+    this.handleShot(ev.clientX - rect.left, ev.clientY - rect.top);
+  };
+
+  /* Public: used by real input and by the attract-mode autopilot. */
+  ClutchGame.prototype.handleShot = function (x, y) {
+    if (this.state !== 'playing') return false;
+    var now = performance.now();
+    this.shots++;
+    // topmost = most recently spawned first
+    for (var i = this.active.length - 1; i >= 0; i--) {
+      var t = this.active[i];
+      var dx = x - t.px, dy = y - t.py;
+      var r = t.currentRadius * 1.05; // slightly forgiving
+      if (dx * dx + dy * dy <= r * r) {
+        var reaction = Math.round(now - t.spawnAt);
+        this.reactions.push(reaction);
+        this.hits++;
+        this.combo++;
+        if (this.combo > this.bestCombo) this.bestCombo = this.combo;
+        var pts = scoreForHit(reaction, this.combo);
+        this.score += pts;
+        this._burst(t.px, t.py, t.color);
+        this._popup(t.px, t.py - 18, '+' + pts, '#22d3ee', 20);
+        if (reaction < 200) this._popup(t.px, t.py + 16, reaction + 'ms ⚡', '#fbbf24', 14);
+        ClutchSfx.hit(this.combo);
+        this.active.splice(i, 1);
+        this._emitHud();
+        return true;
+      }
+    }
+    // miss: combo breaks, small feedback
+    if (this.combo > 0) this._popup(x, y - 14, 'COMBO LOST', '#f87171', 13);
+    this.combo = 0;
+    ClutchSfx.miss();
+    this._emitHud();
+    return false;
+  };
+
+  /* For the attract-mode autopilot: the oldest live target, if any. */
+  ClutchGame.prototype.getActiveTarget = function () {
+    if (this.state !== 'playing' || !this.active.length) return null;
+    var t = this.active[0];
+    return { x: t.px, y: t.py };
+  };
+
+  ClutchGame.prototype._burst = function (x, y, color) {
+    for (var i = 0; i < 12; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var sp = 60 + Math.random() * 160;
+      this.particles.push({
+        x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, color: color, size: 2 + Math.random() * 3
+      });
+    }
+  };
+
+  ClutchGame.prototype._popup = function (x, y, text, color, size) {
+    this.popups.push({ x: x, y: y, text: text, color: color, size: size || 18, life: 1 });
+  };
+
+  ClutchGame.prototype._emitHud = function () {
+    if (!this.hooks.onHud) return;
+    var acc = this.shots > 0 ? Math.round((this.hits / this.shots) * 100) : null;
+    var avg = this.reactions.length
+      ? Math.round(this.reactions.reduce(function (a, b) { return a + b; }, 0) / this.reactions.length)
+      : null;
+    this.hooks.onHud({
+      score: this.score, combo: this.combo,
+      mult: comboMultiplier(this.combo),
+      hp: this.hp, round: this.round, roundLabel: ROUNDS[this.round].label,
+      avgReaction: avg, accuracy: acc
+    });
+  };
+
+  ClutchGame.prototype._loop = function (now) {
+    this.raf = requestAnimationFrame(this._loop);
+    if (this.state === 'banner' && now >= this.bannerUntil) this._startRound();
+    if (this.state === 'clearing' && now >= this.clearUntil) {
+      this.state = 'banner';
+      this._showRoundBanner(this._nextRound);
+    }
+    if (this.state === 'playing') {
+      // spawn due events
+      while (this.planIdx < this.plan.length) {
+        var ev = this.plan[this.planIdx];
+        if (ev.round !== this.round) break;
+        if (now - this.roundStartAt < ev.at) break;
+        ev.targets.forEach(function (spec) {
+          this.active.push({
+            px: spec.x * this.w, py: spec.y * this.h,
+            radius: spec.radius, peek: spec.peek,
+            spawnAt: now, currentRadius: spec.radius * 0.3,
+            color: ['#22d3ee', '#f472b6', '#a78bfa'][Math.floor(Math.random() * 3)]
+          });
+          ClutchSfx.spawn();
+        }, this);
+        this.planIdx++;
+      }
+      // expire targets → they shoot you
+      for (var i = this.active.length - 1; i >= 0; i--) {
+        var t = this.active[i];
+        var age = now - t.spawnAt;
+        if (age >= t.peek) {
+          this.active.splice(i, 1);
+          this.hp--;
+          this.combo = 0;
+          this.shakeUntil = now + 220;
+          if (this.hooks.onPlayerShot) this.hooks.onPlayerShot();
+          ClutchSfx.shot();
+          this._emitHud();
+          if (this.hp <= 0) {
+            this._finishRun();
+            return;
+          }
+        }
+      }
+      // round clear?
+      var roundDone = this.planIdx >= this.plan.length ||
+        (this.planIdx < this.plan.length && this.plan[this.planIdx].round !== this.round);
+      if (roundDone && this.active.length === 0) this._endRound(true);
+    }
+    this._render(now);
+  };
+
+  ClutchGame.prototype._render = function (now) {
+    var ctx = this.ctx, w = this.w, h = this.h;
+    ctx.clearRect(0, 0, w, h);
+
+    // shake when shot
+    ctx.save();
+    if (now < this.shakeUntil) {
+      ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+    }
+
+    // arena floor grid
+    ctx.strokeStyle = 'rgba(56, 89, 145, 0.25)';
+    ctx.lineWidth = 1;
+    var step = 64;
+    for (var gx = step; gx < w; gx += step) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (var gy = step; gy < h; gy += step) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    // targets
+    this.active.forEach(function (t) {
+      var age = now - t.spawnAt;
+      var grow = Math.min(age / 120, 1);
+      var ease = 1 - Math.pow(1 - grow, 3);
+      t.currentRadius = t.radius * (0.3 + 0.7 * ease);
+      var remain = Math.max(0, 1 - age / t.peek);
+      var urgent = remain < 0.3;
+      var r = t.currentRadius;
+
+      // peek countdown ring
+      ctx.beginPath();
+      ctx.arc(t.px, t.py, r + 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remain);
+      ctx.strokeStyle = urgent ? '#f87171' : t.color;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // body
+      var grad = ctx.createRadialGradient(t.px, t.py, 2, t.px, t.py, r);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.35, t.color);
+      grad.addColorStop(1, '#0d1526');
+      ctx.beginPath();
+      ctx.arc(t.px, t.py, r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = urgent ? '#f87171' : 'rgba(255,255,255,0.85)';
+      ctx.stroke();
+
+      // core
+      ctx.beginPath();
+      ctx.arc(t.px, t.py, Math.max(5, r * 0.22), 0, Math.PI * 2);
+      ctx.fillStyle = '#070b16';
+      ctx.fill();
+      // rotor ticks
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      for (var k = 0; k < 4; k++) {
+        var a = (k * Math.PI) / 2 + now / 600;
+        ctx.beginPath();
+        ctx.moveTo(t.px + Math.cos(a) * (r + 13), t.py + Math.sin(a) * (r + 13));
+        ctx.lineTo(t.px + Math.cos(a) * (r + 20), t.py + Math.sin(a) * (r + 20));
+        ctx.stroke();
+      }
+    });
+
+    // particles
+    var dt = 1 / 60;
+    for (var i = this.particles.length - 1; i >= 0; i--) {
+      var p = this.particles[i];
+      p.life -= dt * 1.6;
+      if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 220 * dt;
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // score popups
+    ctx.textAlign = 'center';
+    for (var j = this.popups.length - 1; j >= 0; j--) {
+      var pp = this.popups[j];
+      pp.life -= dt * 1.1;
+      pp.y -= 34 * dt;
+      if (pp.life <= 0) { this.popups.splice(j, 1); continue; }
+      ctx.globalAlpha = Math.min(1, pp.life * 1.5);
+      ctx.font = '800 ' + pp.size + 'px "Segoe UI", Arial, sans-serif';
+      ctx.fillStyle = pp.color;
+      ctx.fillText(pp.text, pp.x, pp.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // crosshair at mouse
+    if (this.mouse.inside && this.state === 'playing') {
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(this.mouse.x, this.mouse.y, 14, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(this.mouse.x - 20, this.mouse.y); ctx.lineTo(this.mouse.x - 8, this.mouse.y);
+      ctx.moveTo(this.mouse.x + 8, this.mouse.y); ctx.lineTo(this.mouse.x + 20, this.mouse.y);
+      ctx.moveTo(this.mouse.x, this.mouse.y - 20); ctx.lineTo(this.mouse.x, this.mouse.y - 8);
+      ctx.moveTo(this.mouse.x, this.mouse.y + 8); ctx.lineTo(this.mouse.x, this.mouse.y + 20);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  };
+
+  // Exposed for tests.
+  global.ClutchGame = ClutchGame;
+  global.ClutchGameInternals = {
+    ROUNDS: ROUNDS, MAX_HP: MAX_HP, BASE_POINTS: BASE_POINTS,
+    rankFor: rankFor, speedBonus: speedBonus, buildPlan: buildPlan,
+    comboMultiplier: comboMultiplier, scoreForHit: scoreForHit
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* Booth Display — big-screen leaderboard view for a second monitor.
+   Updates live when a run is saved (BroadcastChannel / storage events).
+   Fully offline: reads localStorage only. */
+(function (global) {
+  'use strict';
+
+  var TIPS = [
+    'TIP: Faster flicks score more — under 200ms earns a speed bonus.',
+    'TIP: Streaks build your multiplier up to ×2.0. Don\'t miss!',
+    'TIP: A full run takes under 2 minutes. Beat the daily champion!',
+    'TIP: Duel Mode — two players, one identical clutch. Higher score wins.',
+    'TIP: Targets shrink and speed up every round. Stay sharp.',
+    'TIP: Your best flick time is tracked — pros average under 200ms.'
+  ];
+
+  var tipIdx = 0;
+  var clockTimer = null;
+  var tipTimer = null;
+  var started = false;
+
+  function renderBoards() {
+    var today = ClutchBoard.today();
+    var all = ClutchBoard.allTime();
+    renderList(document.getElementById('display-today'), today);
+    renderList(document.getElementById('display-alltime'), all);
+    var champ = document.getElementById('display-champ');
+    if (today.length) {
+      champ.textContent = '👑 TODAY\'S CHAMPION: ' + today[0].name + ' — ' +
+        today[0].score.toLocaleString() + ' PTS';
+    } else {
+      champ.textContent = 'NO SCORES YET TODAY — BE THE FIRST CHAMPION';
+    }
+  }
+
+  function renderList(el, list) {
+    if (!el) return;
+    if (!list.length) {
+      el.innerHTML = '<li class="empty">No scores yet — step up and play!</li>';
+      return;
+    }
+    el.innerHTML = list.map(function (e, i) {
+      return '<li><span><span class="r">' + (i + 1) + '.</span><b>' + esc(e.name) +
+        '</b></span><span>' + e.score.toLocaleString() + ' <small style="color:var(--muted)">· R' +
+        e.rounds + '</small></span></li>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function tickClock() {
+    var el = document.getElementById('display-clock');
+    if (el) el.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function rotateTip() {
+    var el = document.getElementById('display-tip');
+    if (el) el.textContent = TIPS[tipIdx % TIPS.length];
+    tipIdx++;
+  }
+
+  var Display = {
+    start: function () {
+      renderBoards();
+      tickClock();
+      rotateTip();
+      if (!started) {
+        started = true;
+        ClutchBoard.onUpdate(renderBoards);
+        clockTimer = setInterval(tickClock, 10000);
+        tipTimer = setInterval(rotateTip, 8000);
+      }
+    },
+    refresh: renderBoards
+  };
+
+  global.ClutchDisplay = Display;
+})(window);
+
+</script>
+<script>
+/* Clutch Arena — app wiring: screens, modes, duel flow, attract mode. */
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var game = null;
+  var mode = 'solo'; // 'solo' | 'duel' | 'attract'
+  var duel = { p1: 'PLAYER 1', p2: 'PLAYER 2', seed: 0, phase: 0, results: [] };
+  var lastResult = null;
+  var attractTimer = null;
+  var attractPilot = null;
+  var attractSeen = null;
+
+  /* ---------- screens ---------- */
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    $(id).classList.add('active');
+  }
+
+  /* ---------- home ---------- */
+  function renderHomeTop5() {
+    var list = ClutchBoard.today().slice(0, 5);
+    var el = $('home-top5');
+    if (!list.length) {
+      el.innerHTML = '<li class="empty">No scores yet today — be the first!</li>';
+      return;
+    }
+    el.innerHTML = list.map(function (e, i) {
+      return '<li><span>' + (i + 1) + '. <b>' + e.name + '</b></span><span>' +
+        e.score.toLocaleString() + ' pts</span></li>';
+    }).join('');
+  }
+
+  /* ---------- HUD ---------- */
+  function updateHud(h) {
+    $('hud-score').textContent = h.score.toLocaleString();
+    $('hud-round').textContent = h.round + 1;
+    $('hud-round-label').textContent = h.roundLabel;
+    $('hud-combo').textContent = h.combo >= 2
+      ? '🔥 ×' + h.mult.toFixed(1) + ' · ' + h.combo + ' STREAK' : '';
+    $('hud-avg').textContent = h.avgReaction ? h.avgReaction + 'ms' : '—';
+    $('hud-acc').textContent = h.accuracy !== null ? h.accuracy + '%' : '—';
+    var hp = $('hud-hp');
+    hp.innerHTML = '';
+    for (var i = 0; i < 3; i++) {
+      var plate = document.createElement('div');
+      plate.className = 'hp-plate' + (i < h.hp ? '' : ' lost');
+      hp.appendChild(plate);
+    }
+  }
+
+  function showBanner(title, sub) {
+    var b = $('round-banner');
+    if (!title) { b.classList.add('hidden'); b.textContent = ''; return; }
+    b.innerHTML = title + (sub ? '<div class="round-banner sub" style="position:static">' + sub + '</div>' : '');
+    b.classList.remove('hidden');
+  }
+
+  function flashRed() {
+    var f = $('flash');
+    f.classList.add('on');
+    setTimeout(function () { f.classList.remove('on'); }, 450);
+  }
+
+  /* ---------- run lifecycle ---------- */
+  function startRun(seed) {
+    show('screen-game');
+    $('duel-indicator').classList.add('hidden');
+    if (mode === 'duel') {
+      var el = $('duel-indicator');
+      el.textContent = (duel.phase === 0 ? '⚔ ' + duel.p1 : '⚔ ' + duel.p2) + ' — DUEL RUN';
+      el.classList.remove('hidden');
+    }
+    game.startRun({ seed: seed });
+  }
+
+  function onGameOver(result) {
+    lastResult = result;
+    if (mode === 'attract') { endAttractRun(); return; }
+    if (mode === 'duel') {
+      duel.results[duel.phase] = result;
+      if (duel.phase === 0) {
+        showScoreScreen(result, true);
+      } else {
+        showDuelResult();
+      }
+      return;
+    }
+    showScoreScreen(result, false);
+  }
+
+  function showScoreScreen(result, isDuelP1) {
+    $('score-outcome').textContent = result.victory ? '★ ALL 5 ROUNDS CLEARED ★' : 'RUN ENDED';
+    $('score-rank').textContent = result.rank;
+    $('score-final').textContent = result.score.toLocaleString();
+    var cells = [
+      ['TARGETS HIT', String(result.hits)],
+      ['ACCURACY', Math.round(result.accuracy) + '%'],
+      ['AVG FLICK', result.avgReaction ? result.avgReaction + 'ms' : '—'],
+      ['BEST FLICK', result.bestFlick ? result.bestFlick + 'ms' : '—'],
+      ['BEST STREAK', '×' + (1 + 0.1 * Math.max(result.bestCombo - 1, 0)).toFixed(1) + ' · ' + result.bestCombo],
+      ['ROUNDS WON', result.roundsWon + ' / 5']
+    ];
+    $('stats-grid').innerHTML = cells.map(function (c) {
+      return '<div class="stat-cell"><div class="v">' + c[1] + '</div><div class="k">' + c[0] + '</div></div>';
+    }).join('');
+
+    var box = $('initials-box');
+    if (!isDuelP1 && (ClutchBoard.qualifiesToday(result.score) || ClutchBoard.qualifiesAllTime(result.score))) {
+      box.classList.remove('hidden');
+      $('initials-input').value = '';
+      setTimeout(function () { $('initials-input').focus(); }, 100);
+    } else {
+      box.classList.add('hidden');
+    }
+
+    var again = $('btn-again');
+    again.textContent = isDuelP1 ? '▶ ' + duel.p2 + ' — YOUR TURN' : '↻ PLAY AGAIN';
+    show('screen-score');
+    armAttract();
+  }
+
+  function showDuelResult() {
+    var a = duel.results[0], b = duel.results[1];
+    var winner = a.score >= b.score ? 0 : 1;
+    $('duel-winner').textContent = '🏆 ' + (winner === 0 ? duel.p1 : duel.p2) + ' WINS!';
+    $('duel-compare').innerHTML = [0, 1].map(function (i) {
+      var r = duel.results[i];
+      var name = i === 0 ? duel.p1 : duel.p2;
+      return '<div class="duel-card' + (i === winner ? ' won' : '') + '">' +
+        '<div class="n">' + name + '</div>' +
+        '<div class="s">' + r.score.toLocaleString() + '</div>' +
+        '<div class="d">Rounds: ' + r.roundsWon + '/5<br>Accuracy: ' + Math.round(r.accuracy) + '%<br>' +
+        'Avg flick: ' + (r.avgReaction || '—') + 'ms<br>Rank: ' + r.rank + '</div></div>';
+    }).join('');
+    show('screen-duel-result');
+    armAttract();
+  }
+
+  /* ---------- attract mode ---------- */
+  function armAttract() {
+    disarmAttract();
+    attractTimer = setTimeout(startAttract, 30000);
+  }
+
+  function disarmAttract() {
+    if (attractTimer) { clearTimeout(attractTimer); attractTimer = null; }
+    if (attractPilot) { clearInterval(attractPilot); attractPilot = null; }
+  }
+
+  function startAttract() {
+    if (!$('screen-home').classList.contains('active')) return;
+    document.body.classList.add('attract');
+    mode = 'attract';
+    attractSeen = null;
+    show('screen-game');
+    $('duel-indicator').classList.add('hidden');
+    game.startRun({ seed: ClutchRng.randomSeed() });
+    attractPilot = setInterval(function () {
+      var t = game.getActiveTarget();
+      if (!t) { attractSeen = null; return; }
+      var key = t.x.toFixed(0) + ',' + t.y.toFixed(0);
+      var now = performance.now();
+      if (!attractSeen || attractSeen.key !== key) {
+        attractSeen = { key: key, at: now, delay: 300 + Math.random() * 250, willHit: Math.random() < 0.82 };
+        return;
+      }
+      if (attractSeen.willHit && now - attractSeen.at >= attractSeen.delay) {
+        game.handleShot(t.x, t.y);
+        attractSeen = null;
+      }
+    }, 110);
+  }
+
+  function endAttractRun() {
+    disarmAttract();
+    document.body.classList.remove('attract');
+    mode = 'solo';
+    game.quit();
+    show('screen-home');
+    renderHomeTop5();
+    armAttract();
+  }
+
+  function exitAttractOnInput() {
+    if (mode !== 'attract') return;
+    endAttractRun();
+  }
+
+  /* ---------- init ---------- */
+  function init() {
+    game = new ClutchGame($('arena'), {
+      onHud: updateHud,
+      onBanner: showBanner,
+      onGameOver: onGameOver,
+      onPlayerShot: flashRed
+    });
+
+    // home
+    $('btn-solo').addEventListener('click', function () {
+      ClutchSfx.unlock(); ClutchSfx.click();
+      mode = 'solo'; disarmAttract(); startRun();
+    });
+    $('btn-duel').addEventListener('click', function () {
+      ClutchSfx.unlock(); ClutchSfx.click();
+      disarmAttract(); show('screen-duel-setup');
+    });
+    $('btn-display').addEventListener('click', function () {
+      ClutchSfx.click(); disarmAttract();
+      show('screen-display'); ClutchDisplay.start();
+    });
+
+    // game
+    $('btn-quit').addEventListener('click', function () {
+      game.quit(); mode = 'solo'; show('screen-home'); renderHomeTop5(); armAttract();
+    });
+    $('btn-sound').addEventListener('click', function () {
+      var on = !ClutchSfx.isEnabled();
+      ClutchSfx.setEnabled(on);
+      this.textContent = on ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+    });
+
+    // score
+    $('btn-again').addEventListener('click', function () {
+      ClutchSfx.click();
+      if (mode === 'duel' && duel.phase === 0) {
+        duel.phase = 1;
+        startRun(duel.seed);
+      } else {
+        mode = 'solo';
+        startRun();
+      }
+    });
+    $('btn-home').addEventListener('click', function () {
+      mode = 'solo'; show('screen-home'); renderHomeTop5(); armAttract();
+    });
+    $('btn-save-score').addEventListener('click', saveScore);
+    $('initials-input').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') saveScore();
+    });
+
+    // duel setup
+    $('btn-duel-start').addEventListener('click', function () {
+      ClutchSfx.click();
+      duel.p1 = ($('duel-p1').value.trim() || 'PLAYER 1').toUpperCase().slice(0, 10);
+      duel.p2 = ($('duel-p2').value.trim() || 'PLAYER 2').toUpperCase().slice(0, 10);
+      duel.seed = ClutchRng.randomSeed();
+      duel.phase = 0;
+      duel.results = [];
+      mode = 'duel';
+      startRun(duel.seed);
+    });
+    $('btn-duel-back').addEventListener('click', function () {
+      show('screen-home'); armAttract();
+    });
+
+    // duel result
+    $('btn-duel-rematch').addEventListener('click', function () {
+      ClutchSfx.click();
+      duel.seed = ClutchRng.randomSeed();
+      duel.phase = 0;
+      duel.results = [];
+      mode = 'duel';
+      startRun(duel.seed);
+    });
+    $('btn-duel-home').addEventListener('click', function () {
+      mode = 'solo'; show('screen-home'); renderHomeTop5(); armAttract();
+    });
+
+    // display
+    $('btn-display-play').addEventListener('click', function () {
+      mode = 'solo'; disarmAttract(); startRun();
+    });
+    var resetHold = null;
+    var resetBtn = $('btn-display-reset');
+    resetBtn.addEventListener('pointerdown', function () {
+      resetBtn.textContent = 'HOLD TO CONFIRM…';
+      resetHold = setTimeout(function () {
+        ClutchBoard.clearAll();
+        ClutchDisplay.refresh();
+        resetBtn.textContent = 'BOARDS CLEARED ✓';
+        setTimeout(function () { resetBtn.textContent = 'RESET BOARDS (hold 2s)'; }, 2000);
+      }, 2000);
+    });
+    ['pointerup', 'pointerleave'].forEach(function (ev) {
+      resetBtn.addEventListener(ev, function () {
+        if (resetHold) { clearTimeout(resetHold); resetHold = null; }
+        resetBtn.textContent = 'RESET BOARDS (hold 2s)';
+      });
+    });
+
+    // keyboard shortcuts
+    document.addEventListener('keydown', function (ev) {
+      if (mode === 'attract') { exitAttractOnInput(); return; }
+      if (ev.key === 'Escape' && $('screen-game').classList.contains('active')) {
+        game.quit(); mode = 'solo'; show('screen-home'); renderHomeTop5(); armAttract();
+      } else if (ev.key === 'Enter' && $('screen-home').classList.contains('active')) {
+        mode = 'solo'; disarmAttract(); startRun();
+      }
+    });
+
+    // any pointer activity exits attract mode / resets idle timer
+    document.addEventListener('pointerdown', function () {
+      if (mode === 'attract') { exitAttractOnInput(); return; }
+      if ($('screen-home').classList.contains('active')) armAttract();
+    });
+
+    // direct display link for the second monitor
+    if (new URLSearchParams(window.location.search).get('display') === '1') {
+      show('screen-display');
+      ClutchDisplay.start();
+    } else {
+      renderHomeTop5();
+      armAttract();
+    }
+  }
+
+  function saveScore() {
+    if (!lastResult) return;
+    var name = ($('initials-input').value.trim() || 'ACE').toUpperCase().slice(0, 3);
+    ClutchBoard.add({
+      name: name, score: lastResult.score,
+      rounds: lastResult.roundsWon, acc: lastResult.accuracy
+    });
+    $('initials-box').classList.add('hidden');
+    ClutchSfx.roundClear();
+    renderHomeTop5();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+</script>
+</body>
+</html>
