@@ -509,9 +509,10 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
     { label: '1v1', count: 1, peek: 1400, radius: 52, gap: 900, pairs: 0 },
     { label: '1v2', count: 2, peek: 1200, radius: 48, gap: 850, pairs: 0 },
     { label: '1v3', count: 3, peek: 1000, radius: 44, gap: 800, pairs: 1 },
-    { label: '1v4', count: 4, peek: 850, radius: 42, gap: 750, pairs: 2 },
-    { label: '1v5', count: 5, peek: 700, radius: 40, gap: 700, pairs: 2 }
+    { label: '1v4', count: 4, peek: 950, radius: 42, gap: 750, pairs: 2 },
+    { label: '1v5', count: 5, peek: 900, radius: 40, gap: 700, pairs: 2 }
   ];
+  var PAIR_STAGGER = 350; // ms between the two targets of a "pair" event
   var MAX_HP = 3;
   var BASE_POINTS = 100;
   var RANKS = [
@@ -575,15 +576,17 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
       }
       var t = 600; // first spawn shortly after the round banner
       events.forEach(function (size) {
-        var ev = { at: t, targets: [] };
-        for (var s = 0; s < size; s++) {
+        // a "pair" spawns as two single targets PAIR_STAGGER ms apart, not
+        // two at once: simultaneous pairs are nearly impossible to clear at
+        // a casual pace (two 750ms reactions inside one 700-850ms window)
+        var offsets = size === 2 ? [0, PAIR_STAGGER] : [0];
+        offsets.forEach(function (off) {
           var pos = nextPosition();
-          ev.targets.push({
-            x: pos.x, y: pos.y,
-            radius: round.radius, peek: round.peek
+          plan.push({
+            round: ri, at: t + off,
+            targets: [{ x: pos.x, y: pos.y, radius: round.radius, peek: round.peek }]
           });
-        }
-        plan.push({ round: ri, at: t, targets: ev.targets });
+        });
         t += round.gap + rng.int(0, 150);
       });
     });
@@ -993,6 +996,7 @@ body.attract .home-inner { opacity: .25; pointer-events: none; }
   global.ClutchGame = ClutchGame;
   global.ClutchGameInternals = {
     ROUNDS: ROUNDS, MAX_HP: MAX_HP, BASE_POINTS: BASE_POINTS,
+    PAIR_STAGGER: PAIR_STAGGER,
     rankFor: rankFor, speedBonus: speedBonus, buildPlan: buildPlan,
     comboMultiplier: comboMultiplier, scoreForHit: scoreForHit
   };
