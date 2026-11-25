@@ -52,7 +52,7 @@ All names, artwork and characters are original.
 - Browser playtests of the full loop: home → solo run → score screen →
   leaderboard save → booth display → duel mode → attract mode, plus a
   narrow-screen (390px) check. The 5-round headless-browser regression
-  suite (38 checks) passes on the final build.
+  suite (37 checks) passes on the final build.
 - Balance tuned by simulation and measurement, not guesswork: seven tuning
   variants were compared in a headless simulator (500 runs per variant per
   skill level: slow / medium / fast bot paces), then the winner was verified
