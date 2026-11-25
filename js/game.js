@@ -5,21 +5,27 @@
 (function (global) {
   'use strict';
 
+  /* Balance: V-G, winner of the 7-version simulation experiment
+     (see ../sim/README.md and POLISH-AUDIT.md §6.4). Generous peek windows
+     so casual booth players can clear; score separation comes from the
+     speed-bonus tiers, streak multiplier and high rank thresholds. */
   var ROUNDS = [
-    { label: '1v1', count: 1, peek: 1400, radius: 52, gap: 900, pairs: 0 },
-    { label: '1v2', count: 2, peek: 1200, radius: 48, gap: 850, pairs: 0 },
-    { label: '1v3', count: 3, peek: 1000, radius: 44, gap: 800, pairs: 1 },
-    { label: '1v4', count: 4, peek: 950, radius: 42, gap: 750, pairs: 2 },
-    { label: '1v5', count: 5, peek: 900, radius: 40, gap: 700, pairs: 2 }
+    { label: '1v1', count: 1, peek: 1700, radius: 56, gap: 1000, pairs: 0 },
+    { label: '1v2', count: 2, peek: 1500, radius: 52, gap: 950, pairs: 0 },
+    { label: '1v3', count: 3, peek: 1400, radius: 48, gap: 900, pairs: 1 },
+    { label: '1v4', count: 4, peek: 1300, radius: 46, gap: 850, pairs: 2 },
+    { label: '1v5', count: 5, peek: 1200, radius: 44, gap: 800, pairs: 2 }
   ];
-  var PAIR_STAGGER = 350; // ms between the two targets of a "pair" event
+  var PAIR_STAGGER = 500; // ms between the two targets of a "pair" event
   var MAX_HP = 3;
   var BASE_POINTS = 100;
+  var ROUND_BONUS_CLEAN = 200;    // × round number, clean round only
+  var ROUND_BONUS_SURVIVED = 100; // × round number, survived but shot
   var RANKS = [
-    { min: 7500, name: 'CHAMPION' },
-    { min: 5000, name: 'ELITE' },
-    { min: 3000, name: 'PRO' },
-    { min: 1500, name: 'RISING' },
+    { min: 11000, name: 'CHAMPION' },
+    { min: 8000, name: 'ELITE' },
+    { min: 5000, name: 'PRO' },
+    { min: 2500, name: 'RISING' },
     { min: 0, name: 'ROOKIE' }
   ];
 
@@ -31,13 +37,14 @@
   }
 
   function speedBonus(reactionMs) {
-    if (reactionMs < 300) return 100;
-    if (reactionMs < 500) return 50;
+    if (reactionMs < 300) return 150;
+    if (reactionMs < 500) return 75;
+    if (reactionMs < 800) return 25;
     return 0;
   }
 
   function comboMultiplier(combo) {
-    return Math.min(1 + 0.1 * Math.max(combo - 1, 0), 2.0);
+    return Math.min(1 + 0.15 * Math.max(combo - 1, 0), 2.5);
   }
 
   function scoreForHit(reactionMs, combo) {
@@ -78,7 +85,7 @@
       events.forEach(function (size) {
         // a "pair" spawns as two single targets PAIR_STAGGER ms apart, not
         // two at once: simultaneous pairs are nearly impossible to clear at
-        // a casual pace (two 750ms reactions inside one 700-850ms window)
+        // a casual pace (two ~850ms reactions inside one window)
         var offsets = size === 2 ? [0, PAIR_STAGGER] : [0];
         offsets.forEach(function (off) {
           var pos = nextPosition();
@@ -102,6 +109,14 @@
     this.dpr = 1;
     this.w = 0; this.h = 0;
     this.mouse = { x: -100, y: -100, inside: false };
+    this.motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    this.reducedMotion = !!(this.motionQuery && this.motionQuery.matches);
+    this._onMotionChange = this._onMotionChange.bind(this);
+    if (this.motionQuery && this.motionQuery.addEventListener) {
+      this.motionQuery.addEventListener('change', this._onMotionChange);
+    } else if (this.motionQuery && this.motionQuery.addListener) {
+      this.motionQuery.addListener(this._onMotionChange);
+    }
     this._resize = this._resize.bind(this);
     this._loop = this._loop.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
@@ -116,6 +131,8 @@
   ClutchGame.prototype._resize = function () {
     var rect = this.canvas.getBoundingClientRect();
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cssWidth = rect.width;
+    this.cssHeight = rect.height;
     this.w = Math.max(320, rect.width);
     this.h = Math.max(240, rect.height);
     this.canvas.width = Math.round(this.w * this.dpr);
@@ -161,7 +178,7 @@
     // the canvas is hidden until the game screen shows; measure it now that
     // it is visible, otherwise clicks and targets use different coordinates
     this._resize();
-    this.seed = opts.seed || ClutchRng.randomSeed();
+    this.seed = opts.seed == null ? ClutchRng.randomSeed() : opts.seed;
     this.plan = buildPlan(this.seed);
     this.state = 'banner';
     this.runStartAt = performance.now();
@@ -193,13 +210,23 @@
   ClutchGame.prototype._endRound = function (cleared) {
     if (cleared && this.roundClean) {
       this.roundsWon++;
-      var bonus = 250 * (this.round + 1);
+      var bonus = ROUND_BONUS_CLEAN * (this.round + 1);
       this.score += bonus;
+      // clean round restores 1 HP (cap MAX_HP) — a comeback mechanic.
+      // Runs before _finishRun on the last round so a clean final round
+      // also counts toward the HP bonus, matching the sim model.
+      var healed = this.hp < MAX_HP;
+      if (healed) this.hp++;
       ClutchSfx.roundClear();
-      this._popup(this.w / 2, this.h * 0.4, 'ROUND CLEAR  +' + bonus, '#34d399', 26);
+      this._popup(this.w / 2, this.h * 0.4,
+        'ROUND CLEAR  +' + bonus + (healed ? '  ·  +1 HP' : ''), '#34d399', 26);
+      this._burst(this.w / 2, this.h / 2, '#34d399'); // E5: clean-round burst
+      this._burst(this.w / 2, this.h / 2, '#22d3ee');
     } else if (cleared) {
-      // survived the round but took a hit: no bonus, round not counted as won
-      this._popup(this.w / 2, this.h * 0.4, 'ROUND SURVIVED', '#fbbf24', 22);
+      // survived the round but took a hit: half-rate bonus, round not won
+      var survBonus = ROUND_BONUS_SURVIVED * (this.round + 1);
+      this.score += survBonus;
+      this._popup(this.w / 2, this.h * 0.4, 'ROUND SURVIVED  +' + survBonus, '#fbbf24', 22);
     }
     if (this.round >= ROUNDS.length - 1) {
       this.victory = cleared && this.hp > 0;
@@ -244,25 +271,39 @@
     window.removeEventListener('resize', this._resize);
     this.canvas.removeEventListener('pointermove', this._onPointerMove);
     this.canvas.removeEventListener('pointerdown', this._onPointerDown);
+    if (this.motionQuery && this.motionQuery.removeEventListener) {
+      this.motionQuery.removeEventListener('change', this._onMotionChange);
+    } else if (this.motionQuery && this.motionQuery.removeListener) {
+      this.motionQuery.removeListener(this._onMotionChange);
+    }
+  };
+
+  ClutchGame.prototype._onMotionChange = function (ev) {
+    this.reducedMotion = ev.matches;
+    if (this.reducedMotion) { this.particles = []; this.popups = []; }
   };
 
   ClutchGame.prototype._onPointerMove = function (ev) {
     var rect = this.canvas.getBoundingClientRect();
-    this.mouse.x = ev.clientX - rect.left;
-    this.mouse.y = ev.clientY - rect.top;
+    if (!rect.width || !rect.height) return;
+    this.mouse.x = (ev.clientX - rect.left) * this.w / rect.width;
+    this.mouse.y = (ev.clientY - rect.top) * this.h / rect.height;
     this.mouse.inside = true;
   };
 
   ClutchGame.prototype._onPointerDown = function (ev) {
     ev.preventDefault();
     var rect = this.canvas.getBoundingClientRect();
-    this.handleShot(ev.clientX - rect.left, ev.clientY - rect.top);
+    if (!rect.width || !rect.height) return;
+    this.handleShot((ev.clientX - rect.left) * this.w / rect.width,
+      (ev.clientY - rect.top) * this.h / rect.height);
   };
 
   /* Public: used by real input and by the attract-mode autopilot. */
   ClutchGame.prototype.handleShot = function (x, y) {
     if (this.state !== 'playing') return false;
     var now = performance.now();
+    if (!this._expireTargets(now)) return false;
     this.shots++;
     // topmost = most recently spawned first
     for (var i = this.active.length - 1; i >= 0; i--) {
@@ -270,8 +311,8 @@
       var dx = x - t.px, dy = y - t.py;
       var r = t.currentRadius * 1.2; // forgiving hitbox, especially on touch
       if (dx * dx + dy * dy <= r * r) {
-        var reaction = Math.round(now - t.spawnAt);
-        this.reactions.push(reaction);
+        var reaction = now - t.spawnAt;
+        this.reactions.push(Math.round(reaction));
         this.hits++;
         this.combo++;
         if (this.combo > this.bestCombo) this.bestCombo = this.combo;
@@ -279,7 +320,11 @@
         this.score += pts;
         this._burst(t.px, t.py, t.color);
         this._popup(t.px, t.py - 18, '+' + pts, '#22d3ee', 20);
-        if (reaction < 200) this._popup(t.px, t.py + 16, reaction + 'ms ⚡', '#fbbf24', 14);
+        // E5: streak milestones pop at arena center
+        if (this.combo === 5 || this.combo === 10 || this.combo === 15) {
+          this._popup(this.w / 2, this.h * 0.32, this.combo + ' STREAK!', '#fbbf24', 30);
+        }
+        if (reaction < 200) this._popup(t.px, t.py + 16, Math.round(reaction) + 'ms ⚡', '#fbbf24', 14);
         ClutchSfx.hit(this.combo);
         this.active.splice(i, 1);
         this._emitHud();
@@ -302,6 +347,7 @@
   };
 
   ClutchGame.prototype._burst = function (x, y, color) {
+    if (this.reducedMotion) return;
     for (var i = 0; i < 12; i++) {
       var a = Math.random() * Math.PI * 2;
       var sp = 60 + Math.random() * 160;
@@ -313,6 +359,7 @@
   };
 
   ClutchGame.prototype._popup = function (x, y, text, color, size) {
+    if (this.reducedMotion) return;
     this.popups.push({ x: x, y: y, text: text, color: color, size: size || 18, life: 1 });
   };
 
@@ -330,11 +377,33 @@
     });
   };
 
+  ClutchGame.prototype._expireTargets = function (now) {
+    for (var i = this.active.length - 1; i >= 0; i--) {
+      var t = this.active[i];
+      if (now - t.spawnAt >= t.peek) {
+        this.active.splice(i, 1);
+        this.hp--;
+        this.combo = 0;
+        this.roundClean = false;
+        this.shakeUntil = now + 220;
+        if (this.hooks.onPlayerShot) this.hooks.onPlayerShot();
+        ClutchSfx.shot();
+        this._emitHud();
+        if (this.hp <= 0) {
+          this._finishRun();
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   ClutchGame.prototype._loop = function (now) {
     this.raf = requestAnimationFrame(this._loop);
     // re-measure if the displayed size changed (window resize, screen shown)
-    var cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
-    if (cw > 0 && (cw !== this.w || ch !== this.h)) this._resize();
+    var rect = this.canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0 &&
+        (rect.width !== this.cssWidth || rect.height !== this.cssHeight)) this._resize();
     if (this.state === 'banner' && now >= this.bannerUntil) this._startRound();
     if (this.state === 'clearing' && now >= this.clearUntil) {
       this.state = 'banner';
@@ -351,7 +420,7 @@
             fx: spec.x, fy: spec.y,
             px: spec.x * this.w, py: spec.y * this.h,
             radius: spec.radius, peek: spec.peek,
-            spawnAt: now, currentRadius: spec.radius * 0.3,
+            spawnAt: this.roundStartAt + ev.at, currentRadius: spec.radius * 0.3,
             color: ['#22d3ee', '#f472b6', '#a78bfa'][Math.floor(Math.random() * 3)]
           });
           ClutchSfx.spawn();
@@ -359,24 +428,7 @@
         this.planIdx++;
       }
       // expire targets → they shoot you
-      for (var i = this.active.length - 1; i >= 0; i--) {
-        var t = this.active[i];
-        var age = now - t.spawnAt;
-        if (age >= t.peek) {
-          this.active.splice(i, 1);
-          this.hp--;
-          this.combo = 0;
-          this.roundClean = false;
-          this.shakeUntil = now + 220;
-          if (this.hooks.onPlayerShot) this.hooks.onPlayerShot();
-          ClutchSfx.shot();
-          this._emitHud();
-          if (this.hp <= 0) {
-            this._finishRun();
-            return;
-          }
-        }
-      }
+      if (!this._expireTargets(now)) return;
       // round clear?
       var roundDone = this.planIdx >= this.plan.length ||
         (this.planIdx < this.plan.length && this.plan[this.planIdx].round !== this.round);
@@ -389,9 +441,9 @@
     var ctx = this.ctx, w = this.w, h = this.h;
     ctx.clearRect(0, 0, w, h);
 
-    // shake when shot
+    // shake when shot (disabled under prefers-reduced-motion, E7)
     ctx.save();
-    if (now < this.shakeUntil) {
+    if (!this.reducedMotion && now < this.shakeUntil) {
       ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
     }
 
@@ -410,6 +462,7 @@
       t.currentRadius = t.radius * (0.3 + 0.7 * ease);
       var remain = Math.max(0, 1 - age / t.peek);
       var urgent = remain < 0.3;
+      // The visible target must follow the unchanged gameplay hitbox.
       var r = t.currentRadius;
 
       // peek countdown ring
@@ -441,13 +494,13 @@
       ctx.strokeStyle = 'rgba(255,255,255,0.6)';
       ctx.lineWidth = 2;
       for (var k = 0; k < 4; k++) {
-        var a = (k * Math.PI) / 2 + now / 600;
+        var a = (k * Math.PI) / 2 + (this.reducedMotion ? 0 : now / 600);
         ctx.beginPath();
         ctx.moveTo(t.px + Math.cos(a) * (r + 13), t.py + Math.sin(a) * (r + 13));
         ctx.lineTo(t.px + Math.cos(a) * (r + 20), t.py + Math.sin(a) * (r + 20));
         ctx.stroke();
       }
-    });
+    }, this);
 
     // particles
     var dt = 1 / 60;
@@ -497,6 +550,8 @@
   global.ClutchGameInternals = {
     ROUNDS: ROUNDS, MAX_HP: MAX_HP, BASE_POINTS: BASE_POINTS,
     PAIR_STAGGER: PAIR_STAGGER,
+    ROUND_BONUS_CLEAN: ROUND_BONUS_CLEAN,
+    ROUND_BONUS_SURVIVED: ROUND_BONUS_SURVIVED,
     rankFor: rankFor, speedBonus: speedBonus, buildPlan: buildPlan,
     comboMultiplier: comboMultiplier, scoreForHit: scoreForHit
   };
