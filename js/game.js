@@ -170,11 +170,13 @@
     this.shakeUntil = 0;
     this.victory = false;
     this.seed = 0;
+    this.attract = false;
   };
 
   ClutchGame.prototype.startRun = function (opts) {
     opts = opts || {};
     this._resetRun();
+    this.attract = !!opts.attract;
     // the canvas is hidden until the game screen shows; measure it now that
     // it is visible, otherwise clicks and targets use different coordinates
     this._resize();
@@ -299,6 +301,14 @@
       (ev.clientY - rect.top) * this.h / rect.height);
   };
 
+  ClutchGame.prototype._vibrate = function (duration) {
+    try {
+      if (!this.attract && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(duration);
+      }
+    } catch (e) {}
+  };
+
   /* Public: used by real input and by the attract-mode autopilot. */
   ClutchGame.prototype.handleShot = function (x, y) {
     if (this.state !== 'playing') return false;
@@ -326,6 +336,7 @@
         }
         if (reaction < 200) this._popup(t.px, t.py + 16, Math.round(reaction) + 'ms ⚡', '#fbbf24', 14);
         ClutchSfx.hit(this.combo);
+        this._vibrate(15);
         this.active.splice(i, 1);
         this._emitHud();
         return true;
@@ -335,6 +346,7 @@
     if (this.combo > 0) this._popup(x, y - 14, 'COMBO LOST', '#f87171', 13);
     this.combo = 0;
     ClutchSfx.miss();
+    this._vibrate(25);
     this._emitHud();
     return false;
   };
@@ -388,6 +400,7 @@
         this.shakeUntil = now + 220;
         if (this.hooks.onPlayerShot) this.hooks.onPlayerShot();
         ClutchSfx.shot();
+        this._vibrate(60);
         this._emitHud();
         if (this.hp <= 0) {
           this._finishRun();
