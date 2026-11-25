@@ -48,11 +48,12 @@ All names, artwork and characters are original.
 ## Validation
 - 90 automated logic tests (RNG determinism, spawn-plan fairness, scoring,
   rank thresholds, seed handling, target expiry, leaderboard record
-  validation, tie ranks) plus controller rank tests — all passing.
+  validation, tie ranks) plus controller rank tests and haptic feedback
+  tests — all passing.
 - Browser playtests of the full loop: home → solo run → score screen →
   leaderboard save → booth display → duel mode → attract mode, plus a
   narrow-screen (390px) check. The 5-round headless-browser regression
-  suite (37 checks) passes on the final build.
+  suite (41 checks) passes on the final build.
 - Balance tuned by simulation and measurement, not guesswork: seven tuning
   variants were compared in a headless simulator (500 runs per variant per
   skill level: slow / medium / fast bot paces), then the winner was verified
