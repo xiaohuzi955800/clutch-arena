@@ -63,7 +63,7 @@ node tests/test-controller.js  # rank controller tests
 ```
 
 Plus a 5-round headless-browser regression suite (solo, duel, booth display,
-attract mode, narrow screen — 38 checks, all passing) in
+attract mode, narrow screen — 37 checks, all passing) in
 `../cdp-tests/` (kept outside this repo; see the submission notes).
 
 ## Built with JetBrains tools
