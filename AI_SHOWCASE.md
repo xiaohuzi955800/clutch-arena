@@ -112,7 +112,7 @@ independently:
 - **90 logic tests + controller tests**, all passing (run by the human, not
   just by Junie).
 - **A 5-round headless-browser regression suite** (solo, duel, booth
-  display, attract mode, narrow screen — 38 checks, all passing), re-run
+  display, attract mode, narrow screen — 37 checks, all passing), re-run
   after both fix rounds. Getting it running took its own debugging: Chrome
   157's Local Network Access checks block `localhost` navigations from
   `about:blank` in this environment, so the suite now runs over `file://`
