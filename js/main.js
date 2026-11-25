@@ -211,6 +211,8 @@
 
     var again = $('btn-again');
     again.textContent = isDuelP1 ? '▶ ' + duel.p2 + ' — YOUR TURN' : '↻ PLAY AGAIN';
+    if (isDuelP1) $('score-booth-cta').classList.add('hidden');
+    else $('score-booth-cta').classList.remove('hidden');
     show('screen-score');
     armAttract();
   }
@@ -297,7 +299,7 @@
     attractSeen = null;
     show('screen-game');
     $('duel-indicator').classList.add('hidden');
-    game.startRun({ seed: ClutchRng.randomSeed() });
+    game.startRun({ seed: ClutchRng.randomSeed(), attract: true });
     attractPilot = setInterval(function () {
       var t = game.getActiveTarget();
       if (!t) { attractSeen = null; return; }
@@ -551,8 +553,8 @@
   }
 
   /* E1: shareable result card — drawn on an offscreen canvas, downloaded
-     as PNG. No QR (zero-dependency constraint); the game URL is printed
-     as text on the card. */
+     as PNG. The card uses a text URL to keep canvas export simple; the page
+     already includes a static QR code. */
   function downloadResultCard() {
     if (!lastResult) return;
     var r = lastResult;
